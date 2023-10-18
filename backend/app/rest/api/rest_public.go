@@ -50,6 +50,8 @@ type pubStore interface {
 
 // GET /find?site=siteID&url=post-url&format=[tree|plain]&sort=[+/-time|+/-score|+/-controversy]&view=[user|all]&since=unix_ts_msec
 // find comments for given post. Returns in tree or plain formats, sorted
+//
+// When `url` parameter is not set (e.g. request is for site-wide comments), does not return deleted comments.
 func (s *public) findCommentsCtrl(w http.ResponseWriter, r *http.Request) {
 	locator := store.Locator{SiteID: r.URL.Query().Get("site"), URL: r.URL.Query().Get("url")}
 	sort := r.URL.Query().Get("sort")
@@ -77,22 +79,36 @@ func (s *public) findCommentsCtrl(w http.ResponseWriter, r *http.Request) {
 			comments = []store.Comment{} // error should clear comments and continue for post info
 		}
 		comments = s.applyView(comments, view)
+
+		var commentsInfo store.PostInfo
+		if info, ee := s.dataService.Info(locator, s.readOnlyAge); ee == nil {
+			commentsInfo = info
+		}
+
+		if !since.IsZero() { // if since is set, number of comments can be different from total in the DB
+			commentsInfo.Count = 0
+			for _, c := range comments {
+				if !c.Deleted {
+					commentsInfo.Count++
+				}
+			}
+		}
+
+		// post might be readonly without any comments, Info call will fail then and ReadOnly flag should be checked separately
+		if !commentsInfo.ReadOnly && locator.URL != "" && s.dataService.IsReadOnly(locator) {
+			commentsInfo.ReadOnly = true
+		}
+
 		var b []byte
 		switch format {
 		case "tree":
-			tree := service.MakeTree(comments, sort, s.readOnlyAge)
-			if tree.Nodes == nil { // eliminate json nil serialization
-				tree.Nodes = []*service.Node{}
+			withInfo := treeWithInfo{Tree: service.MakeTree(comments, sort), Info: commentsInfo}
+			if withInfo.Nodes == nil { // eliminate json nil serialization
+				withInfo.Nodes = []*service.Node{}
 			}
-			if s.dataService.IsReadOnly(locator) {
-				tree.Info.ReadOnly = true
-			}
-			b, e = encodeJSONWithHTML(tree)
+			b, e = encodeJSONWithHTML(withInfo)
 		default:
-			withInfo := commentsWithInfo{Comments: comments}
-			if info, ee := s.dataService.Info(locator, s.readOnlyAge); ee == nil {
-				withInfo.Info = info
-			}
+			withInfo := commentsWithInfo{Comments: comments, Info: commentsInfo}
 			b, e = encodeJSONWithHTML(withInfo)
 		}
 		return b, e
