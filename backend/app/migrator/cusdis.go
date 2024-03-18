@@ -112,6 +112,10 @@ func (d *Cusdis) convert(r io.Reader, siteID string) (ch chan store.Comment) {
 				continue
 			}
 
+			if !comment.Approved {
+				continue
+			}
+
 			var parentID string
 
 			if comment.ParentID != nil {
