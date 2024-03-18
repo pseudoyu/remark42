@@ -68,6 +68,8 @@ func ImportComments(p ImportParams) (int, error) {
 		importer = &Commento{DataStore: p.DataStore}
 	case "native":
 		importer = &Native{DataStore: p.DataStore}
+	case "cusdis":
+		importer = &Cusdis{DataStore: p.DataStore}
 	default:
 		return 0, fmt.Errorf("unsupported import provider %s", p.Provider)
 	}
