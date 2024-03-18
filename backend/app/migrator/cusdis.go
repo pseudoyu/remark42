@@ -108,6 +108,12 @@ func (d *Cusdis) convert(r io.Reader, siteID string) (ch chan store.Comment) {
 				continue
 			}
 
+			// Add current admin user to the moderator
+			//if comment.ModeratorID != nil {
+			//	u.ID = "github_xxx"
+			//	u.Picture = "xxx"
+			//}
+
 			if comment.DeletedAt != nil {
 				continue
 			}
